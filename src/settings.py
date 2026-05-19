@@ -28,6 +28,7 @@ class State(Enum):
     RIGHT_ACTION = auto()
     RELOAD = auto()
     EMOTE = auto()
+    STRESSED = auto()
 
 
 class Settings:

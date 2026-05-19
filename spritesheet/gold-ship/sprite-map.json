@@ -1,5 +1,5 @@
 {
-    "FrameRate": 60,
+    "FrameRate": 25,
     "SpriteColumn": 10,
     "FrameHeight": 350,
     "FrameWidth": 350,

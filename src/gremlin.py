@@ -19,6 +19,7 @@ from .hotspot_geometry import (
 )
 from .movement_handler import MovementHandler, reset_all_walk_frames
 from .settings import State
+from .system_monitor import SystemMonitor
 
 
 class GremlinWindow(QWidget):
@@ -27,12 +28,15 @@ class GremlinWindow(QWidget):
         super().__init__()
 
         # --- @! Window Setup ------------------------------------------------------------
+        # --- @! Window Setup ------------------------------------------------------------
         self.setWindowFlags(
             Qt.WindowType.FramelessWindowHint |
             Qt.WindowType.WindowStaysOnTopHint
         )
         self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
-        self.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
+        self.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
+        self.setFocusPolicy(Qt.FocusPolicy.NoFocus)
+        
         self.setFixedSize(
             settings.SpriteMap.FrameWidth,
             settings.SpriteMap.FrameHeight
@@ -48,17 +52,17 @@ class GremlinWindow(QWidget):
         self.sprite_label.setScaledContents(True)
 
         # --- @! Hotspots ----------------------------------------------------------------
-        self.top_hotspot = QWidget(self)
-        self.top_hotspot.setGeometry(*compute_top_hotspot_geometry())
-        self.top_hotspot.mousePressEvent = self.top_hotspot_click
+       # self.top_hotspot = QWidget(self)
+        #self.top_hotspot.setGeometry(*compute_top_hotspot_geometry())
+        #self.top_hotspot.mousePressEvent = self.top_hotspot_click
 
-        self.left_hotspot = QWidget(self)
-        self.left_hotspot.setGeometry(*compute_left_hotspot_geometry())
-        self.left_hotspot.mousePressEvent = self.left_hotspot_click
+        #self.left_hotspot = QWidget(self)
+        #self.left_hotspot.setGeometry(*compute_left_hotspot_geometry())
+        #self.left_hotspot.mousePressEvent = self.left_hotspot_click
 
-        self.right_hotspot = QWidget(self)
-        self.right_hotspot.setGeometry(*compute_right_hotspot_geometry())
-        self.right_hotspot.mousePressEvent = self.right_hotspot_click
+        #self.right_hotspot = QWidget(self)
+        #self.right_hotspot.setGeometry(*compute_right_hotspot_geometry())
+        #self.right_hotspot.mousePressEvent = self.right_hotspot_click
 
         # --- @! Reload animation for Blue Archive gremlins ------------------------------
         self.has_reload = settings.SpriteMap.HasReloadAnimation
@@ -99,6 +103,15 @@ class GremlinWindow(QWidget):
             self.reset_emote_timer()
 
         # --- @! Start -------------------------------------------------------------------
+        self.monitor = SystemMonitor(cpu_threshold=55.0, gpu_threshold=80.0)
+        self.monitor.on_stress = self._queue_stress_reaction
+        self.monitor.on_fullscreen = self._queue_fullscreen_reaction
+        self._fullscreen_pending = None  # None = sem mudança, True/False = mudança
+        self._stress_pending = False
+        self._stress_cpu = 0.0
+        self._stress_gpu = 0.0
+        
+        self.monitor.start()
         self.setup_tray_icon()
         self.play_sound(settings.SfxMap.Intro)
         self.master_timer.start(1000 // settings.SpriteMap.FrameRate)
@@ -291,6 +304,12 @@ class GremlinWindow(QWidget):
                 c.Emote = self.play_animation(
                     sprite_manager.get(m.Emote), c.Emote, f.Emote)
 
+            case State.STRESSED:
+                c.Emote = self.play_animation(
+                    sprite_manager.get(m.Emote), c.Emote, f.Emote)
+                if __import__('time').time() - getattr(self, 'stressed_since', 0) > 5:
+                    self.set_state(State.IDLE)
+
             case State.LEFT_ACTION:
                 if not self.has_reload or self.ammo >= 0:
                     c.LeftAction = self.play_animation(
@@ -316,6 +335,10 @@ class GremlinWindow(QWidget):
                 # this state is handled by outro_tick, but we stop master_timer
                 # so this case is just a failsafe.
                 pass
+            # Processa reações do sistema (bridge thread -> Qt)
+        if self._stress_pending:
+            self._stress_pending = False
+            self._on_system_stress(self._stress_cpu, self._stress_gpu)
 
     def handle_walking_animation_and_movement(self):
         """ Helper function to keep animation_tick clean. """
@@ -343,6 +366,24 @@ class GremlinWindow(QWidget):
         else:
             self.set_state(State.HOVER if self.underMouse() else State.IDLE)
 
+    def _queue_stress_reaction(self, cpu, gpu):
+        """Chamado pela thread do monitor - só salva o estado, não toca na UI."""
+        print(f"[Queue] CPU: {cpu:.1f}% GPU: {gpu:.1f}%")
+        self._stress_pending = True
+        self._stress_cpu = cpu
+        self._stress_gpu = gpu
+
+    def _on_system_stress(self, cpu, gpu):
+        """Chamado na thread Qt - pode modificar a UI."""
+        if self.current_state not in [State.STRESSED, State.OUTRO]:
+            print(f"[Gremlin] Stress detectado! CPU: {cpu:.1f}% GPU: {gpu:.1f}%")
+            self.stressed_since = __import__('time').time()
+            self.set_state(State.STRESSED)
+
+
+    def _queue_fullscreen_reaction(self, is_fullscreen):
+        """Chamado pela thread do monitor - so salva o estado."""
+        self._fullscreen_pending = is_fullscreen
     def play_sound(self, file_name, delay_seconds=0):
         """ Plays a sound, respecting the LastPlayed delay. """
         path = os.path.join(
@@ -402,7 +443,9 @@ class GremlinWindow(QWidget):
         os.execl(sys.executable, sys.executable, *sys.argv)
 
     def close_app(self):
+        self.monitor.stop()
         self.master_timer.stop()
+        
         self.idle_timer.stop()
 
         if settings.Settings.Systray:
