@@ -1,7 +1,37 @@
 
 # Linux Desktop Gremlins!
 
-Basically [KurtVelasco's Desktop Gremlin](https://github.com/KurtVelasco/Desktop_Gremlin), but re-written in PySide + Qt6.
+## Fork
+
+This is a custom fork of linux-desktop-gremlin.
+
+Original project: https://github.com/iluvgirlswithglasses/linux-desktop-gremlin
+
+Modifications:
+- Custom character system (spritesheet-based)
+- Added iago-gremlin character
+- Expanded sound and animation sets
+- Click-through mode (gremlin stays on screen while gaming, fully transparent to input)
+- System event reactions via `src/system_monitor.py`:
+  - **CPU/GPU stress** — reacts when CPU > 55% or GPU > 80% with emote animation
+  - **Gaming detection** — detects Steam games running via `gameoverlayui` process
+  - **Music detection** — detects audio playback via PipeWire; gremlin dances silently while music plays and returns to idle when it stops
+- Reduced default frame rate for smoother-looking animations
+
+## System Monitor
+
+The `src/system_monitor.py` module runs in a background thread and monitors system events, calling callbacks when state changes. It is decoupled from Qt — all UI changes go through a pending flag bridge in `animation_tick()` to avoid cross-thread Qt calls.
+
+Currently monitored events:
+
+| Event | Threshold | Callback |
+|---|---|---|
+| High CPU | 55% | `on_stress(cpu, gpu)` |
+| High GPU | 80% | `on_stress(cpu, gpu)` |
+| Gaming (Steam) | gameoverlayui process | `on_fullscreen(bool)` |
+| Music (PipeWire) | any sink in `running` state | `on_music(bool)` |
+
+Dependencies added: `psutil`, `xdotool`, `kdotool`, `stress-ng` (for testing).
 
 https://github.com/user-attachments/assets/eeb75510-9725-4f3a-a259-0959ddc22603
 

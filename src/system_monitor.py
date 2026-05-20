@@ -17,6 +17,8 @@ class SystemMonitor:
         self._thread = None
         self._last_reaction = 0    # evita spam de reações
         self.on_fullscreen = None      # callback: chamado quando fullscreen muda
+        self.on_music = None           # callback: chamado quando música começa/para
+        self._is_music = False
         self._is_fullscreen = False    # estado atual
         self._last_fullscreen_check = 0
 
@@ -39,6 +41,12 @@ class SystemMonitor:
                     self._last_reaction = now
                     if self.on_stress:
                         self.on_stress(cpu, gpu)
+
+                music = self._get_music()
+                if music != self._is_music:
+                    self._is_music = music
+                    if self.on_music:
+                        self.on_music(music)
 
                 fullscreen = self._get_fullscreen()
                 if fullscreen != self._is_fullscreen:
@@ -87,6 +95,26 @@ class SystemMonitor:
                         return True
                 except:
                     pass
+        except:
+            pass
+        return False
+
+    def _get_music(self) -> bool:
+        """Detecta se ha audio sendo reproduzido via PipeWire."""
+        try:
+            result = subprocess.run(
+                'pw-dump',
+                shell=True, capture_output=True, text=True, timeout=2
+            )
+            import json
+            data = json.loads(result.stdout)
+            for obj in data:
+                props = obj.get('info', {}).get('props', {})
+                state = obj.get('info', {}).get('state', '')
+                app = props.get('application.name', '')
+                # ignora o proprio gremlin
+                if state == 'running' and 'python' not in app.lower() and app:
+                    return True
         except:
             pass
         return False

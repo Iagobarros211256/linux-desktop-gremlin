@@ -106,6 +106,9 @@ class GremlinWindow(QWidget):
         self.monitor = SystemMonitor(cpu_threshold=55.0, gpu_threshold=80.0)
         self.monitor.on_stress = self._queue_stress_reaction
         self.monitor.on_fullscreen = self._queue_fullscreen_reaction
+        self.monitor.on_music = self._queue_music_reaction
+        self._music_pending = None
+        self._silent_emote = False
         self._fullscreen_pending = None  # None = sem mudança, True/False = mudança
         self._stress_pending = False
         self._stress_cpu = 0.0
@@ -184,7 +187,9 @@ class GremlinWindow(QWidget):
                 self.play_sound(settings.SfxMap.Reload)
                 self.ammo = 6
             case State.EMOTE:
-                self.play_sound(settings.SfxMap.Emote)
+                if not self._silent_emote:
+                    self.play_sound(settings.SfxMap.Emote)
+                self._silent_emote = False
                 emote_duration = settings.EmoteConfig.EmoteDuration
                 self.emote_duration_timer.start(emote_duration)
 
@@ -340,6 +345,27 @@ class GremlinWindow(QWidget):
             self._stress_pending = False
             self._on_system_stress(self._stress_cpu, self._stress_gpu)
 
+        if self._music_pending is not None:
+            is_music = self._music_pending
+            self._music_pending = None
+            if is_music:
+                print("[Gremlin] Musica detectada!")
+                self._silent_emote = True
+                self.emote_duration_timer.stop()  # nao sai do emote automaticamente
+                self.set_state(State.EMOTE)
+            else:
+                print("[Gremlin] Musica parou!")
+                if self.current_state == State.EMOTE:
+                    self.set_state(State.IDLE)
+
+        if self._fullscreen_pending is not None:
+            is_gaming = self._fullscreen_pending
+            self._fullscreen_pending = None
+            if is_gaming:
+                print('[Gremlin] Gaming detectado!')
+            else:
+                print('[Gremlin] Gaming terminou!')
+
     def handle_walking_animation_and_movement(self):
         """ Helper function to keep animation_tick clean. """
         f = settings.FrameCounts
@@ -368,7 +394,6 @@ class GremlinWindow(QWidget):
 
     def _queue_stress_reaction(self, cpu, gpu):
         """Chamado pela thread do monitor - só salva o estado, não toca na UI."""
-        print(f"[Queue] CPU: {cpu:.1f}% GPU: {gpu:.1f}%")
         self._stress_pending = True
         self._stress_cpu = cpu
         self._stress_gpu = gpu
@@ -380,6 +405,10 @@ class GremlinWindow(QWidget):
             self.stressed_since = __import__('time').time()
             self.set_state(State.STRESSED)
 
+
+    def _queue_music_reaction(self, is_music):
+        """Chamado pela thread do monitor - so salva o estado."""
+        self._music_pending = is_music
 
     def _queue_fullscreen_reaction(self, is_fullscreen):
         """Chamado pela thread do monitor - so salva o estado."""
