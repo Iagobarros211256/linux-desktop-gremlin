@@ -561,6 +561,12 @@ class GremlinWindow(QWidget):
     def on_emote_finished(self):
         """ Fired by emote_duration_timer. Transitions back to idle/hover. """
         if self.current_state == State.EMOTE:
+            # se musica ainda tocando, continua dancando
+            if self.monitor._is_music:
+                self._silent_emote = True
+                self.emote_duration_timer.stop()
+                self.set_state(State.EMOTE)
+                return
             if self.underMouse():
                 self.set_state(State.HOVER)
             else:
