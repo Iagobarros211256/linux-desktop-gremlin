@@ -1,0 +1,9 @@
+event: hits
+data: []
+
+event: token
+data: "Nao encontrei isso no seu acervo."
+
+event: done
+data: {"timings": {"embed": 3, "vetorial": 0, "textual": 0, "fusao_rescore": 0, "hidratacao": 0}, "tokens_per_second": null, "refused": true}
+

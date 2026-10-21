@@ -29,3 +29,6 @@ venv/
 
 # UV / tooling cache (opcional)
 uv.lock
+
+# Testes
+.pytest_cache/

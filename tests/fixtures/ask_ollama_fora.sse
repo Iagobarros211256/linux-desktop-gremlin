@@ -1,0 +1,3 @@
+event: error
+data: "embed falhou: [Errno 111] Connection refused"
+
