@@ -107,8 +107,8 @@ def test_resposta_completa(janela):
     assert janela.fases == [Fase.BUSCANDO, Fase.RESPONDENDO, Fase.PRONTO]
     assert janela.botao.text() == "Perguntar"
     assert not janela.campo.isReadOnly()
-    assert "1.5 s" in janela.status.text()
-    assert "12.5 tok/s" in janela.status.text()
+    # Vírgula decimal: é português.
+    assert janela.status.text() == "Pronto em 1,5 s, 12,5 tokens/s"
 
 
 def test_fontes_numeradas_como_no_prompt_do_stego(janela):
@@ -118,7 +118,7 @@ def test_fontes_numeradas_como_no_prompt_do_stego(janela):
     itens = [janela.fontes.item(i) for i in range(janela.fontes.count())]
     assert [i.text() for i in itens] == [
         "[1] Escalonador do Linux",
-        "[2] Diário  · restrito",
+        "[2] Diário  (restrito)",
     ]
     assert itens[0].data(Qt.ItemDataRole.UserRole) == "/home/iago/notas/linux.md"
     assert "árvore rubro-negra" in itens[0].toolTip()

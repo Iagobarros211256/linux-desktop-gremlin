@@ -502,6 +502,7 @@ class GremlinWindow(QWidget):
         if self.ask_window is None:
             self.ask_window = AskWindow()
             self.ask_window.fase_mudou.connect(self.react_to_assistant)
+            self.ask_window.ancorar_em(self)  # balão em cima da cabeça
         self.ask_window.abrir()
 
     # --- @! Reações às perguntas ao Stego ------------------------------------------------
