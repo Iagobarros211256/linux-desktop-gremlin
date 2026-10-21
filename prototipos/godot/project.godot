@@ -1,0 +1,24 @@
+; Protótipo em Godot — mesmo roteiro do protótipo em QML.
+config_version=5
+
+[application]
+
+config/name="Gremlin - prototipo Godot"
+run/main_scene="res://main.tscn"
+config/features=PackedStringArray("4.7", "GL Compatibility")
+
+[display]
+
+window/size/viewport_width=520
+window/size/viewport_height=650
+window/size/resizable=false
+window/size/borderless=true
+window/size/always_on_top=true
+window/size/transparent=true
+window/per_pixel_transparency/allowed=true
+
+[rendering]
+
+renderer/rendering_method="gl_compatibility"
+renderer/rendering_method.mobile="gl_compatibility"
+viewport/transparent_background=true
