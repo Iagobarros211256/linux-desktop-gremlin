@@ -29,6 +29,9 @@ class State(Enum):
     RELOAD = auto()
     EMOTE = auto()
     STRESSED = auto()
+    # Reagindo a uma pergunta ao Stego. Qual animação toca e por quanto
+    # tempo vem de src/assistant/reactions.py, não de um estado por fase.
+    ASSISTANT = auto()
 
 
 class Settings:

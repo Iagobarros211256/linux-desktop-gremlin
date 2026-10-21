@@ -13,6 +13,7 @@ from PySide6.QtMultimedia import QSoundEffect
 from . import settings
 from . import sprite_manager
 from .assistant.dialog import AskWindow
+from .assistant.reactions import REACOES, resolver_animacao
 from .hotspot_geometry import (
     compute_top_hotspot_geometry,
     compute_left_hotspot_geometry,
@@ -117,6 +118,10 @@ class GremlinWindow(QWidget):
         
         self.monitor.start()
         self.ask_window = None  # janela de perguntas ao Stego, criada no 1º uso
+        self._assist_reacao = None  # Reacao em andamento (estado ASSISTANT)
+        self._assist_anim = None  # chave do sprite que está tocando
+        self._assist_frame = 0
+        self._assist_voltas = None  # voltas que faltam; None = até a próxima fase
         self.setup_tray_icon()
         self.play_sound(settings.SfxMap.Intro)
         self.master_timer.start(1000 // settings.SpriteMap.FrameRate)
@@ -317,6 +322,9 @@ class GremlinWindow(QWidget):
                 if __import__('time').time() - getattr(self, 'stressed_since', 0) > 5:
                     self.set_state(State.IDLE)
 
+            case State.ASSISTANT:
+                self._assistant_tick()
+
             case State.LEFT_ACTION:
                 if not self.has_reload or self.ammo >= 0:
                     c.LeftAction = self.play_animation(
@@ -346,6 +354,11 @@ class GremlinWindow(QWidget):
         if self._stress_pending:
             self._stress_pending = False
             self._on_system_stress(self._stress_cpu, self._stress_gpu)
+
+        if self._music_pending is not None and self.current_state == State.ASSISTANT:
+            # Pensando/respondendo tem prioridade sobre a dança. Quando a
+            # reação acabar, _end_assistant_reaction olha se ainda tem música.
+            self._music_pending = None
 
         if self._music_pending is not None:
             is_music = self._music_pending
@@ -402,7 +415,9 @@ class GremlinWindow(QWidget):
 
     def _on_system_stress(self, cpu, gpu):
         """Chamado na thread Qt - pode modificar a UI."""
-        if self.current_state not in [State.STRESSED, State.OUTRO]:
+        # Durante uma pergunta a CPU alta é quase sempre o próprio Ollama:
+        # reagir a isso trocaria o "pensando" por "estressado".
+        if self.current_state not in [State.STRESSED, State.OUTRO, State.ASSISTANT]:
             print(f"[Gremlin] Stress detectado! CPU: {cpu:.1f}% GPU: {gpu:.1f}%")
             self.stressed_since = __import__('time').time()
             self.set_state(State.STRESSED)
@@ -481,7 +496,60 @@ class GremlinWindow(QWidget):
     def open_ask_window(self):
         if self.ask_window is None:
             self.ask_window = AskWindow()
+            self.ask_window.fase_mudou.connect(self.react_to_assistant)
         self.ask_window.abrir()
+
+    # --- @! Reações às perguntas ao Stego ------------------------------------------------
+
+    def react_to_assistant(self, fase):
+        """Troca a animação conforme a fase da pergunta (ver reactions.py)."""
+        if self.current_state == State.OUTRO:
+            return
+
+        reacao = REACOES[fase]
+        if reacao.animacao is None:
+            if self.current_state == State.ASSISTANT:
+                self._end_assistant_reaction()
+            return
+
+        # BUSCANDO -> RESPONDENDO usa a mesma reação: não reinicia a animação.
+        if self.current_state == State.ASSISTANT and reacao == self._assist_reacao:
+            return
+
+        self.reset_idle_timer()  # acorda se estava dormindo
+        self._assist_reacao = reacao
+        self._assist_anim = resolver_animacao(
+            reacao.animacao, settings.SpriteMap, settings.FrameCounts)
+        self._assist_frame = 0
+        self._assist_voltas = reacao.voltas
+        if reacao.som:
+            self.play_sound(getattr(settings.SfxMap, reacao.som, None) or "")
+        self.set_state(State.ASSISTANT)
+
+    def _assistant_tick(self):
+        anim = self._assist_anim
+        self._assist_frame = self.play_animation(
+            sprite_manager.get(getattr(settings.SpriteMap, anim)),
+            self._assist_frame,
+            getattr(settings.FrameCounts, anim))
+
+        # play_animation volta o contador a 0 quando completa uma volta.
+        if self._assist_frame == 0 and self._assist_voltas is not None:
+            self._assist_voltas -= 1
+            if self._assist_voltas <= 0:
+                self._end_assistant_reaction()
+
+    def _end_assistant_reaction(self):
+        self._assist_reacao = None
+        self._assist_anim = None
+        if self.monitor._is_music:
+            # A música começou (ou continuou) durante a pergunta: volta a dançar.
+            self._silent_emote = True
+            self.set_state(State.EMOTE)
+            self.emote_duration_timer.stop()
+        else:
+            self.set_state(State.IDLE)
+        self.reset_idle_timer()
 
     def reset_app(self):
         if settings.Settings.Systray:
