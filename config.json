@@ -1,6 +1,6 @@
 {
     "StartingChar": "iago-gremlin",
-    "Systray": false,
+    "Systray": true,
     "FollowRadius": 150.0,
     "EmoteKeyEnabled": true,
     "EmoteKey": "P",

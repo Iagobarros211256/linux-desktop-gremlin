@@ -8,14 +8,16 @@ import pytest
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
-from PySide6.QtCore import QCoreApplication  # noqa: E402
+from PySide6.QtWidgets import QApplication  # noqa: E402
 
 FIXTURES = Path(__file__).parent / "fixtures"
 
 
 @pytest.fixture(scope="session")
 def qapp():
-    return QCoreApplication.instance() or QCoreApplication([])
+    # QApplication (e não QCoreApplication) porque a janela usa widgets;
+    # só pode existir uma por processo, então é a mesma para todos os testes.
+    return QApplication.instance() or QApplication([])
 
 
 class _FakeStegoHandler(BaseHTTPRequestHandler):

@@ -12,6 +12,7 @@ from PySide6.QtMultimedia import QSoundEffect
 
 from . import settings
 from . import sprite_manager
+from .assistant.dialog import AskWindow
 from .hotspot_geometry import (
     compute_top_hotspot_geometry,
     compute_left_hotspot_geometry,
@@ -115,6 +116,7 @@ class GremlinWindow(QWidget):
         self._stress_gpu = 0.0
         
         self.monitor.start()
+        self.ask_window = None  # janela de perguntas ao Stego, criada no 1º uso
         self.setup_tray_icon()
         self.play_sound(settings.SfxMap.Intro)
         self.master_timer.start(1000 // settings.SpriteMap.FrameRate)
@@ -452,6 +454,11 @@ class GremlinWindow(QWidget):
         self.tray_icon.setToolTip("Gremlin")
 
         menu = QMenu()
+
+        ask_action = QAction("Perguntar…", self)
+        ask_action.triggered.connect(self.open_ask_window)
+        menu.addAction(ask_action)
+
         menu.addSeparator()
 
         reappear_action = QAction("Reappear", self)
@@ -463,7 +470,18 @@ class GremlinWindow(QWidget):
         menu.addAction(close_action)
 
         self.tray_icon.setContextMenu(menu)
+        self.tray_icon.activated.connect(self._on_tray_activated)
         self.tray_icon.show()
+
+    def _on_tray_activated(self, reason):
+        # Clique esquerdo no ícone abre a janela; o direito continua com o menu.
+        if reason == QSystemTrayIcon.ActivationReason.Trigger:
+            self.open_ask_window()
+
+    def open_ask_window(self):
+        if self.ask_window is None:
+            self.ask_window = AskWindow()
+        self.ask_window.abrir()
 
     def reset_app(self):
         if settings.Settings.Systray:
@@ -479,6 +497,12 @@ class GremlinWindow(QWidget):
 
         if settings.Settings.Systray:
             self.tray_icon.hide()
+
+        if self.ask_window is not None:
+            # Cancela para o Stego não seguir gerando uma resposta que
+            # ninguém vai ler (ele só percebe o cancelamento na escrita).
+            self.ask_window.client.cancel()
+            self.ask_window.hide()
 
         # correctly sets the outro state to fix some audio issues
         self.set_state(State.OUTRO)

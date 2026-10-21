@@ -186,7 +186,12 @@ class StegoClient(QObject):
         erro = reply.error()
         E = QNetworkReply.NetworkError
         if erro in (E.ConnectionRefusedError, E.HostNotFoundError):
-            return f"o Stego não está rodando em {self.base_url} (rode: stego serve)"
+            # "stego" só existe dentro do ambiente do projeto Stego, não
+            # no PATH: por isso o comando sugerido é o do uv.
+            return (
+                f"o Stego não está rodando em {self.base_url} "
+                "(na pasta do Stego, rode: uv run stego serve)"
+            )
         if erro in (E.TimeoutError, E.OperationCanceledError):
             segundos = self.transfer_timeout_ms // 1000
             return f"o Stego ficou {segundos}s sem responder"
