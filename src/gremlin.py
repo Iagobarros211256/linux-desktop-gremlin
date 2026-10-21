@@ -14,6 +14,7 @@ from . import settings
 from . import sprite_manager
 from .assistant.dialog import AskWindow
 from .assistant.reactions import REACOES, resolver_animacao
+from .assistant.ipc import CommandServer
 from .hotspot_geometry import (
     compute_top_hotspot_geometry,
     compute_left_hotspot_geometry,
@@ -118,6 +119,10 @@ class GremlinWindow(QWidget):
         
         self.monitor.start()
         self.ask_window = None  # janela de perguntas ao Stego, criada no 1º uso
+        # Atalho global do KDE -> scripts/gremlin-perguntar -> este socket.
+        self.command_server = CommandServer(parent=self)
+        self.command_server.perguntar_pedido.connect(self.open_ask_window)
+        self.command_server.start()
         self._assist_reacao = None  # Reacao em andamento (estado ASSISTANT)
         self._assist_anim = None  # chave do sprite que está tocando
         self._assist_frame = 0
@@ -554,10 +559,14 @@ class GremlinWindow(QWidget):
     def reset_app(self):
         if settings.Settings.Systray:
             self.tray_icon.hide()
+        # execl troca o processo sem passar pelo close_app: o socket
+        # precisa ser liberado aqui, senão o Gremlin novo o encontra ocupado.
+        self.command_server.close()
         QApplication.quit()
         os.execl(sys.executable, sys.executable, *sys.argv)
 
     def close_app(self):
+        self.command_server.close()
         self.monitor.stop()
         self.master_timer.stop()
         

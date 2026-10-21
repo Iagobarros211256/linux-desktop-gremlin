@@ -182,3 +182,26 @@ def test_reabrir_a_janela_nao_duplica_a_reacao(gremlin):
     gremlin.ask_window._mudar_fase(Fase.BUSCANDO)
     assert chamadas == [Fase.BUSCANDO]
     gremlin.ask_window.close()
+
+
+# --- atalho do KDE (scripts/gremlin-perguntar) -------------------------------------
+
+
+def test_atalho_abre_a_janela_de_perguntas(gremlin):
+    from test_ipc import carregar_script, em_thread
+
+    assert gremlin.command_server.escutando
+    assert gremlin.ask_window is None
+    resposta = em_thread(lambda: carregar_script().enviar("perguntar", gremlin.command_server.caminho))
+    assert resposta == "ok"
+    assert gremlin.ask_window is not None and gremlin.ask_window.isVisible()
+    gremlin.ask_window.close()
+
+
+def test_fechar_o_gremlin_libera_o_socket(gremlin, ipc_path):
+    import os
+
+    assert os.path.exists(ipc_path)
+    gremlin.close_app()
+    assert not os.path.exists(ipc_path)
+    gremlin.close_timer.stop()

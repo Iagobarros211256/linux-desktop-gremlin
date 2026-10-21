@@ -1,0 +1,71 @@
+#!/usr/bin/env python3
+"""Abre a janela de perguntas do Gremlin que já está rodando.
+
+Feito para ser o comando de um atalho global do KDE (ex.: Meta+G).
+Só biblioteca padrão, de propósito: roda com o python3 do sistema, sem
+uv nem PySide6, e responde em ~30 ms. O servidor fica em
+src/assistant/ipc.py.
+
+Saída: 0 = janela aberta; 1 = Gremlin fechado; 2 = Gremlin respondeu
+erro; 3 = Gremlin não respondeu a tempo.
+"""
+
+import os
+import shutil
+import socket
+import subprocess
+import sys
+
+TIMEOUT_S = 3.0
+
+
+def socket_path() -> str:
+    # Cópia de src/assistant/ipc.py:socket_path (ver a docstring de lá);
+    # tests/test_ipc.py garante que as duas continuam iguais.
+    if caminho := os.environ.get("GREMLIN_IPC_PATH"):
+        return caminho
+    if runtime := os.environ.get("XDG_RUNTIME_DIR"):
+        return os.path.join(runtime, "linux-desktop-gremlin.sock")
+    return f"/tmp/linux-desktop-gremlin-{os.getuid()}.sock"
+
+
+def avisar(mensagem: str) -> None:
+    """Atalho de teclado não tem terminal: o aviso vai como notificação."""
+    print(mensagem, file=sys.stderr)
+    if shutil.which("notify-send"):
+        subprocess.run(["notify-send", "--app-name=Gremlin", "Gremlin", mensagem], check=False)
+
+
+def enviar(comando: str, caminho: str) -> str:
+    with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as s:
+        s.settimeout(TIMEOUT_S)
+        s.connect(caminho)
+        s.sendall(f"{comando}\n".encode())
+        resposta = b""
+        while b"\n" not in resposta:
+            pedaco = s.recv(256)
+            if not pedaco:
+                break
+            resposta += pedaco
+    return resposta.decode("utf-8", errors="replace").strip()
+
+
+def main() -> int:
+    caminho = socket_path()
+    try:
+        resposta = enviar("perguntar", caminho)
+    except (FileNotFoundError, ConnectionRefusedError):
+        avisar("O Gremlin não está aberto. Abra com ./run.sh e tente de novo.")
+        return 1
+    except socket.timeout:
+        avisar("O Gremlin não respondeu ao atalho.")
+        return 3
+
+    if resposta != "ok":
+        avisar(f"O Gremlin recusou o atalho: {resposta or 'sem resposta'}")
+        return 2
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

@@ -13,6 +13,23 @@ from PySide6.QtWidgets import QApplication  # noqa: E402
 FIXTURES = Path(__file__).parent / "fixtures"
 
 
+@pytest.fixture(autouse=True)
+def ipc_path(monkeypatch):
+    """Todo teste usa um socket próprio, nunca o do Gremlin de verdade.
+
+    Pasta curta em /tmp de propósito: caminho de socket Unix tem limite
+    de 108 bytes, e o tmp_path do pytest costuma passar disso.
+    """
+    import shutil
+    import tempfile
+
+    pasta = tempfile.mkdtemp(prefix="g", dir="/tmp")
+    caminho = os.path.join(pasta, "s.sock")
+    monkeypatch.setenv("GREMLIN_IPC_PATH", caminho)
+    yield caminho
+    shutil.rmtree(pasta, ignore_errors=True)
+
+
 @pytest.fixture(scope="session")
 def qapp():
     # QApplication (e não QCoreApplication) porque a janela usa widgets;
