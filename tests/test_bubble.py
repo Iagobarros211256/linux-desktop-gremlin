@@ -103,6 +103,7 @@ def balao_ancorado(qapp):
     w = AskWindow(client=FakeClient())
     w.ancorar_em(alvo)
     w.abrir()
+    qapp.processEvents()
     yield w, alvo
     w.close()
     alvo.close()
@@ -111,15 +112,22 @@ def balao_ancorado(qapp):
 def esperado(w, alvo):
     g = alvo.frameGeometry()
     t = w.screen().availableGeometry()
-    return posicionar(w.width(), w.height(), (g.x(), g.y(), g.width(), g.height()),
+    largura, altura = w.tamanho_balao()
+    return posicionar(largura, altura, (g.x(), g.y(), g.width(), g.height()),
                       (t.x(), t.y(), t.width(), t.height()))
+
+
+def posicao_do_balao(w):
+    from src.assistant.dialog import MARGEM
+
+    return w.x() + MARGEM, w.y() + MARGEM  # a janela tem uma folga em volta
 
 
 def test_abrir_posiciona_pela_geometria(balao_ancorado):
     w, alvo = balao_ancorado
     p = esperado(w, alvo)
-    assert (w.x(), w.y()) == (p.x, p.y)
-    assert w._cauda_x == p.cauda_x
+    assert posicao_do_balao(w) == (p.x, p.y)
+    assert (w.ctl.caudaX, w.ctl.caudaEmbaixo) == (p.cauda_x, p.cauda_embaixo)
 
 
 def test_balao_segue_o_gremlin_quando_ele_anda(qapp, balao_ancorado):
@@ -127,36 +135,36 @@ def test_balao_segue_o_gremlin_quando_ele_anda(qapp, balao_ancorado):
     alvo.move(alvo.x() + 120, alvo.y())
     qapp.processEvents()
     p = esperado(w, alvo)
-    assert (w.x(), w.y()) == (p.x, p.y)
-
-
-def test_margem_da_cauda_acompanha_o_lado(balao_ancorado):
-    w, _ = balao_ancorado
-    m = w._layout.contentsMargins()
-    if w._cauda_embaixo:
-        assert m.bottom() == m.top() + CAUDA_ALTURA
-    else:
-        assert m.top() == m.bottom() + CAUDA_ALTURA
+    assert posicao_do_balao(w) == (p.x, p.y)
 
 
 def test_abrir_as_fontes_mantem_a_ponta_no_lugar(qapp, balao_ancorado):
     from test_dialog import HITS
 
     w, alvo = balao_ancorado
+    from test_dialog import girar
+
+    w.ctl.acionar("x", False)
     w.client.hits_received.emit(HITS)
-    qapp.processEvents()
+    girar(100)  # Column/Row do QML só recalculam o tamanho ao desenhar um quadro
     altura_antes = w.height()
-    w.botao_fontes.setChecked(True)
-    qapp.processEvents()
+    w.rootObject().setProperty("fontesAbertas", True)
+    girar(100)
     assert w.height() > altura_antes  # cresceu
     p = esperado(w, alvo)
-    assert (w.x(), w.y()) == (p.x, p.y)  # e foi reposicionado
+    assert posicao_do_balao(w) == (p.x, p.y)  # e foi reposicionado
 
 
-def test_fechar_some_e_nao_cancela(balao_ancorado):
+def test_esconder_pelo_esc_nao_cancela(qapp, balao_ancorado):
+    from test_dialog import girar
+
+    from PySide6.QtCore import Qt
+    from PySide6.QtTest import QTest
+
     w, _ = balao_ancorado
-    w.campo.setText("x")
-    w._on_botao()
-    w.botao_fechar.click()
+    w.ctl.acionar("x", False)
+    w.ctl._mudar_fase(w.ctl.fase.__class__.OCIOSO)  # já respondida
+    QTest.keyClick(w, Qt.Key.Key_Escape)
+    girar(400)
     assert not w.isVisible()
     assert w.client.cancelamentos == 0

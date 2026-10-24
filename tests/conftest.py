@@ -7,6 +7,8 @@ from pathlib import Path
 import pytest
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
+# Qt Quick sem GPU nos testes (o balão é QML).
+os.environ.setdefault("QT_QUICK_BACKEND", "software")
 
 from PySide6.QtWidgets import QApplication  # noqa: E402
 
